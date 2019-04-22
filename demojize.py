@@ -4,7 +4,9 @@ import sys
 import os
 import codecs
 import emoji
-
+import re
+from unidecode import unidecode
+from functools import partial
 
 ascii_emoji = {
      'o/'     : '👋',
@@ -101,6 +103,7 @@ ascii_emoji = {
     '=\\'     : '😡',
     ':\'('    : '😢',
     ':\'-('   : '😢',
+    ':-c'	  : '😢',
     '^5'      : '😤',
     '^<_<'    : '😤',
     'o/\\o'   : '😤',
@@ -154,12 +157,62 @@ ascii_emoji = {
     '>;)'     : '😈',
     '>_>^'    : '😤',
     '(・ω・)'   : '😁'
-    ''
 }   
 
 
+abbreviations = {
+	'gf' : 'girlfriend',
+	'm' : 'am',
+	'u' : 'you',
+	'r' : 'are',
+	'ur' : 'your',
+	'k' : 'ok',
+	'fu' :'fuck you',
+	'fn' : 'fucking',
+	'im' : 'i am',
+	'i\'m' : 'i am',
+	'i\'ll' : 'i will',
+	'ill' : 'i will',
+	'i\'ve' : 'i have',
+	'ive' : 'i have',
+	'don\'t' : 'do not',
+	'dont' : 'do not',
+	'doesn\'t' : 'does not',
+	'doesnt' : 'does not',
+	'didin\'t' : 'did not',
+	'didint' : 'did not',
+	'that\'s' : 'that is',
+	'thats' : 'that is',
+	'it\'s' :'it is',
+	'its' : 'it is', # In the dataset it seems that people use frequently this word incorrectly so it makes sense to change it so
+	'can\'t' : 'can not',
+	'cant' : 'can not',
+	'c\'mon' : 'come on',
+	'wtf' : 'what the fuck',
+	'ftw' : 'for the win',
+	'gtfo' : 'get the fuck out',
+	'lol' : 'lots of laughs',
+	'rofl' : 'rolling on the floor laughing',
+	'hw' : 'how',
+	'how\'s' : 'how is',
+	'hows' :' how is',
+	'i ve' : 'i have',
+	'aren\'t' : 'are not',
+	'nvm' : 'nevermind',
+	'g2g' : 'got to go',
+	'wt' : 'what',
+	'kno' : 'know',
+	'nd' : 'second',
+	'fst' : 'first',
+	'2nite' : 'tonight',
+    'how\'s' : 'how is',
+    'what\'s' : 'what is',
+
+}
 
 
+def replace(match):
+    return abbreviations[match.group(0)]
 
 def is_exist(fpath):
     if os.path.isfile(fpath):
@@ -174,11 +227,49 @@ def run(infpath, outfpath):
     print ("demojizing... {}".format(infpath))
     # read
     data = []
+
+    regex_emoji_sequence = re.compile(r"(:[A-Za-z_-]+:):")
+    regex_emoji_after_word = re.compile(r"([A-Za-z-.])(:[A-Za-z_-]+:)")
+    regex_abreviations = re.compile(r"\b[a-zA-Z]+\b")
+    regex_tab = re.compile(r"\t")
+
     with codecs.open(infpath, "r", "utf-8") as fp:
         for line in fp:
+
+            line = line.lower()
+            line = re.sub('|'.join(r'\b%s\b' % re.escape(s) for s in abbreviations), replace, line) 
+
+            
             for word,trueemoj in ascii_emoji.items():
-                line = line.replace(word,trueemoj) 
+            	line = line.replace(word,trueemoj) 
+            
             line = emoji.demojize(line)
+            line = unidecode(line)
+            # Regex replace must take in account the older replaces. As such we cannot use only one call to replace.
+
+            while True:
+                newline = regex_emoji_sequence.sub('\\1 :',line,count=1)
+                if newline == line:
+                    break
+                else:
+                    line = newline
+
+            while True:
+                newline = regex_emoji_after_word.sub('\\1 \\2',line,count=1)
+                if newline == line:
+                    break
+                else:
+                    line = newline
+
+
+            while True:
+                newline = regex_tab.sub(' <end> ',line,count=1)
+                if newline == line:
+                    break
+                else:
+                    line = newline
+
+
             data.append(line)
         # save
     with codecs.open(outfpath, "w", "utf-8") as fp:
